@@ -18,3 +18,6 @@ UserSettings/
 *.svd
 
 .DS_Store
+
+Build Tel GPS maison/
+.utmp/
