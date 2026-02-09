@@ -1,27 +1,51 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-
+using UnityEngine.SceneManagement;
+using TMPro;
 
 public class ConnectionsGameManager : MonoBehaviour
 {
+    [Header("Grid")]
     [SerializeField] private Transform gridContainer;
     [SerializeField] private WordCell cellPrefab;
+
+    [Header("UI")]
     [SerializeField] private Button submitButton;
     [SerializeField] private Transform solvedCategoriesContainer;
     [SerializeField] private CategoryBlock categoryBlockPrefab;
+
+    [Header("End of game")]
+    [SerializeField] private TMP_Text endMessageText;          // <- un TMP_Text dans la scène
+    [SerializeField] private string mainSceneName = "SampleScene"; // <- ta scène map (dans Scene List)
+    [SerializeField] private float returnDelaySeconds = 2.0f;
+
     private List<WordData> allWords;
     private readonly List<WordCell> selectedCells = new();
+    private int solvedCount = 0;
+    private bool gameEnded = false;
+
+    void Start()
+    {
+        if (endMessageText != null)
+            endMessageText.gameObject.SetActive(false);
+
+        CreateWordData();
+        SpawnGrid();
+
+        submitButton.onClick.AddListener(OnSubmit);
+        UpdateSubmitButton();
+    }
 
     void UpdateSubmitButton()
     {
-        submitButton.interactable = (selectedCells.Count == 4);
+        submitButton.interactable = (!gameEnded && selectedCells.Count == 4);
     }
 
     public void OnSubmit()
     {
-        if (selectedCells.Count != 4)
-            return;
+        if (gameEnded) return;
+        if (selectedCells.Count != 4) return;
 
         string cat = selectedCells[0].Data.categoryId;
 
@@ -51,27 +75,50 @@ public class ConnectionsGameManager : MonoBehaviour
             CategoryBlock block = Instantiate(categoryBlockPrefab, solvedCategoriesContainer);
             block.Init(cat, wordsLine);
 
-
             // supprimer les 4 cells de la grille
             foreach (var cell in selectedCells)
                 Destroy(cell.gameObject);
 
             selectedCells.Clear();
+
+            solvedCount++;
+            if (solvedCount >= 4)
+            {
+                EndGame();
+                return;
+            }
         }
         else
         {
             Debug.Log("❌ Wrong group");
+            // optionnel : feedback UI ici
+            selectedCells.Clear(); // si tu veux forcer à re-sélectionner
         }
 
+        UpdateSubmitButton();
     }
 
-    void Start()
+    private void EndGame()
     {
-        CreateWordData();
-        SpawnGrid();
-        submitButton.onClick.AddListener(OnSubmit);
-        UpdateSubmitButton();
+        gameEnded = true;
 
+        // Désactiver UI de jeu
+        submitButton.interactable = false;
+
+        // Afficher message
+        if (endMessageText != null)
+        {
+            endMessageText.text = "Bien joué ! Passe à la prochaine énigme !";
+            endMessageText.gameObject.SetActive(true);
+        }
+
+        // Retour scène principale
+        Invoke(nameof(ReturnToMainScene), returnDelaySeconds);
+    }
+
+    private void ReturnToMainScene()
+    {
+        SceneManager.LoadScene(mainSceneName);
     }
 
     void CreateWordData()
@@ -107,18 +154,19 @@ public class ConnectionsGameManager : MonoBehaviour
         foreach (var word in allWords)
         {
             WordCell cell = Instantiate(cellPrefab, gridContainer);
-            cell.Init(word, this); // ✅ le 2e paramètre manquait
+            cell.Init(word, this);
         }
     }
 
-
-
     public void TryToggleCell(WordCell cell)
     {
+        if (gameEnded) return;
+
         if (cell.IsSelected)
         {
             cell.SetSelected(false);
             selectedCells.Remove(cell);
+            UpdateSubmitButton();
             return;
         }
 

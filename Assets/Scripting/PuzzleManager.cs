@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 using TMPro;
-
+using UnityEngine.SceneManagement;
 
 public class PuzzleManager : MonoBehaviour
 {
@@ -13,14 +13,20 @@ public class PuzzleManager : MonoBehaviour
 
     public TMP_Text solvedText;
 
+    [Header("End of game")]
+    [SerializeField] private string mainSceneName = "SampleScene";
+    [SerializeField] private float returnDelaySeconds = 2.0f;
+
     private List<Tile> tiles = new List<Tile>();
     private int emptyIndex;
+    private bool hasWon = false;
 
     void Start()
     {
         SetupGrid();
         CreateGrid();
-        Shuffle(100); 
+        Shuffle(100);
+        if (solvedText != null) solvedText.gameObject.SetActive(false);
     }
 
     void SetupGrid()
@@ -28,7 +34,6 @@ public class PuzzleManager : MonoBehaviour
         GridLayoutGroup grid = puzzleParent.GetComponent<GridLayoutGroup>();
         RectTransform rt = puzzleParent.GetComponent<RectTransform>();
 
-        // subtract padding
         float panelWidth = rt.rect.width - (grid.padding.left + grid.padding.right);
         float panelHeight = rt.rect.height - (grid.padding.top + grid.padding.bottom);
 
@@ -45,73 +50,84 @@ public class PuzzleManager : MonoBehaviour
     }
 
     void CreateGrid()
-{
-    tiles.Clear();
-
-    for (int i = 0; i < gridSize * gridSize; i++)
     {
-        GameObject tileObj = Instantiate(tilePrefab, puzzleParent);
-        Image img = tileObj.GetComponent<Image>();
-        Button btn = tileObj.GetComponent<Button>();
-        Tile tile = tileObj.GetComponent<Tile>();
+        tiles.Clear();
 
-        if (i == gridSize * gridSize - 1)
+        for (int i = 0; i < gridSize * gridSize; i++)
         {
-            // EMPTY TILE
-            img.sprite = null;
-            img.color = new Color(0, 0, 0, 0); // fully transparent
-            btn.interactable = false;
+            GameObject tileObj = Instantiate(tilePrefab, puzzleParent);
+            Image img = tileObj.GetComponent<Image>();
+            Button btn = tileObj.GetComponent<Button>();
+            Tile tile = tileObj.GetComponent<Tile>();
 
-            emptyIndex = i;
-            tiles.Add(null);
-        }
-        else
-        {
-            // NORMAL TILE
-            img.color = Color.white;
-            img.sprite = tileSprites[i];
+            if (i == gridSize * gridSize - 1)
+            {
+                img.sprite = null;
+                img.color = new Color(0, 0, 0, 0);
+                btn.interactable = false;
 
-            tile.Init(i, this);
-            tile.currentIndex = i;
+                emptyIndex = i;
+                tiles.Add(null);
+            }
+            else
+            {
+                img.color = Color.white;
+                img.sprite = tileSprites[i];
 
-            btn.interactable = true;
-            tiles.Add(tile);
+                tile.Init(i, this);
+                tile.currentIndex = i;
+
+                btn.interactable = true;
+                tiles.Add(tile);
+            }
         }
     }
-}
-
 
     bool IsSolved()
-{
+    {
         for (int i = 0; i < tiles.Count; i++)
         {
-            if (tiles[i] == null)
-                continue;
-
-            if (tiles[i].currentIndex != tiles[i].correctIndex)
-                return false;
+            if (tiles[i] == null) continue;
+            if (tiles[i].currentIndex != tiles[i].correctIndex) return false;
         }
         return true;
-}
+    }
 
     public void TryMove(Tile tile)
-{
-    int tileIndex = tiles.IndexOf(tile);
-
-    if (IsAdjacent(tileIndex, emptyIndex))
     {
-        Swap(tileIndex, emptyIndex);
+        if (hasWon) return;
 
-        if (IsSolved())
+        int tileIndex = tiles.IndexOf(tile);
+
+        if (IsAdjacent(tileIndex, emptyIndex))
         {
-            OnPuzzleSolved();
+            Swap(tileIndex, emptyIndex);
+
+            if (IsSolved())
+            {
+                OnPuzzleSolved();
+            }
         }
     }
-}
+
     void OnPuzzleSolved()
     {
+        if (hasWon) return;
+        hasWon = true;
+
         Debug.Log("Puzzle Solved!");
-        solvedText.gameObject.SetActive(true);
+        if (solvedText != null)
+        {
+            solvedText.text = "Bien joué ! Passe à la prochaine énigme !";
+            solvedText.gameObject.SetActive(true);
+        }
+
+        Invoke(nameof(ReturnToMainScene), returnDelaySeconds);
+    }
+
+    private void ReturnToMainScene()
+    {
+        SceneManager.LoadScene(mainSceneName);
     }
 
     bool IsAdjacent(int a, int b)
@@ -124,26 +140,23 @@ public class PuzzleManager : MonoBehaviour
         return Mathf.Abs(ax - bx) + Mathf.Abs(ay - by) == 1;
     }
 
-
     void Swap(int a, int b)
-{
-    Transform tileA = puzzleParent.GetChild(a);
-    Transform tileB = puzzleParent.GetChild(b);
+    {
+        Transform tileA = puzzleParent.GetChild(a);
+        Transform tileB = puzzleParent.GetChild(b);
 
-    tileA.SetSiblingIndex(b);
-    tileB.SetSiblingIndex(a);
+        tileA.SetSiblingIndex(b);
+        tileB.SetSiblingIndex(a);
 
-    Tile temp = tiles[a];
-    tiles[a] = tiles[b];
-    tiles[b] = temp;
+        Tile temp = tiles[a];
+        tiles[a] = tiles[b];
+        tiles[b] = temp;
 
-    emptyIndex = a;
+        emptyIndex = a;
 
-    if (tiles[b] != null)
-        tiles[b].currentIndex = b;
-}
-
-
+        if (tiles[b] != null)
+            tiles[b].currentIndex = b;
+    }
 
     List<int> GetNeighbors(int index)
     {
@@ -160,51 +173,46 @@ public class PuzzleManager : MonoBehaviour
     }
 
     void Shuffle(int moves = 100)
-{
-    for (int i = 0; i < moves; i++)
     {
-        List<int> neighbors = GetNeighbors(emptyIndex);
-        int rand = neighbors[Random.Range(0, neighbors.Count)];
-        Swap(rand, emptyIndex);
+        for (int i = 0; i < moves; i++)
+        {
+            List<int> neighbors = GetNeighbors(emptyIndex);
+            int rand = neighbors[Random.Range(0, neighbors.Count)];
+            Swap(rand, emptyIndex);
+        }
     }
-}
 
     public void Reshuffle()
-{
-    solvedText.gameObject.SetActive(false);
-
-
-    for (int i = 0; i < puzzleParent.childCount; i++)
     {
-        puzzleParent.GetChild(i).SetSiblingIndex(i);
-    }
+        hasWon = false;
+        CancelInvoke(nameof(ReturnToMainScene));
 
-    tiles.Clear();
-    emptyIndex = -1;
+        if (solvedText != null) solvedText.gameObject.SetActive(false);
 
-    for (int i = 0; i < puzzleParent.childCount; i++)
-    {
-        Tile tile = puzzleParent.GetChild(i).GetComponent<Tile>();
-
-        if (tile == null || !puzzleParent.GetChild(i).GetComponent<Button>().interactable)
+        for (int i = 0; i < puzzleParent.childCount; i++)
         {
-            tiles.Add(null);
-            emptyIndex = i;
+            puzzleParent.GetChild(i).SetSiblingIndex(i);
         }
-        else
+
+        tiles.Clear();
+        emptyIndex = -1;
+
+        for (int i = 0; i < puzzleParent.childCount; i++)
         {
-            tile.currentIndex = i;
-            tiles.Add(tile);
+            Tile tile = puzzleParent.GetChild(i).GetComponent<Tile>();
+
+            if (tile == null || !puzzleParent.GetChild(i).GetComponent<Button>().interactable)
+            {
+                tiles.Add(null);
+                emptyIndex = i;
+            }
+            else
+            {
+                tile.currentIndex = i;
+                tiles.Add(tile);
+            }
         }
+
+        Shuffle(150);
     }
-
-
-    Shuffle(150);
-}
-
-
-
-
-
-
 }
