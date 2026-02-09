@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
-using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 public class ZipBoard : MonoBehaviour
 {
@@ -16,23 +16,21 @@ public class ZipBoard : MonoBehaviour
 
     [Header("Win")]
     [SerializeField] private string winHint = "Indice : la prochaine machine est ...";
+    [SerializeField] private string mainSceneName = "SampleScene";
+    [SerializeField] private float returnDelaySeconds = 2.0f;
     private bool hasWon = false;
 
     // Level data
-    private int[,] numbers;                 // 0 = vide, sinon numéro
-    private bool[,] lit;                    // état allumé
+    private int[,] numbers;
+    private bool[,] lit;
     private CellView[,] views;
 
-    // Pour vérifier "k-1 est allumé"
     private Dictionary<int, Vector2Int> numToPos = new();
-
-    // Pour undo : ordre d’allumage
     private readonly List<Vector2Int> path = new();
 
     private int litCount;
     private int totalCells;
     private int maxNumber = 10;
-    
 
     private void Start()
     {
@@ -40,14 +38,13 @@ public class ZipBoard : MonoBehaviour
 
         LoadLevel();
         BuildGrid();
-        ResetBoard(); // allume 1 automatiquement (comme avant)
+        ResetBoard();
     }
 
     private void LoadLevel()
     {
         numbers = new int[width, height];
 
-        // EXEMPLE : remplace par ton plan
         numbers[0, 0] = 1;
         numbers[2, 1] = 2;
         numbers[4, 0] = 3;
@@ -99,6 +96,10 @@ public class ZipBoard : MonoBehaviour
 
     private void OnCellClicked(Vector2Int pos)
     {
+        // Après victoire : on ignore tout sauf reset via 1
+        if (hasWon && numbers[pos.x, pos.y] != 1)
+            return;
+
         // RESET : cliquer sur 1 réinitialise
         if (numbers[pos.x, pos.y] == 1)
         {
@@ -113,17 +114,12 @@ public class ZipBoard : MonoBehaviour
             return;
         }
 
-        // Si déjà allumée (mais pas la dernière) : invalide
         if (lit[pos.x, pos.y]) return;
-
-        // Si on n’a encore rien (devrait pas arriver car Reset allume 1), sécurité
         if (path.Count == 0) return;
 
-        // Doit être voisine 4-dir de la dernière allumée
         Vector2Int last = path[path.Count - 1];
         if (!IsNeighbor4(pos, last)) return;
 
-        // Si c'est un numéro k > 1, alors (k-1) doit être allumé
         int k = numbers[pos.x, pos.y];
         if (k > 1)
         {
@@ -132,6 +128,7 @@ public class ZipBoard : MonoBehaviour
         }
 
         Light(pos);
+
         if (litCount == totalCells && !IsLastMoveMaxNumber())
         {
             if (statusText != null)
@@ -141,13 +138,6 @@ public class ZipBoard : MonoBehaviour
         {
             Win();
         }
-
-
-        // Après victoire, on ignore tout sauf reset via 1
-        if (hasWon && numbers[pos.x, pos.y] != 1)
-            return;
-        
-
     }
 
     private void Light(Vector2Int pos)
@@ -172,7 +162,6 @@ public class ZipBoard : MonoBehaviour
 
     private void ResetBoard()
     {
-        // éteindre tout
         for (int x = 0; x < width; x++)
         for (int y = 0; y < height; y++)
         {
@@ -184,12 +173,11 @@ public class ZipBoard : MonoBehaviour
         litCount = 0;
         if (statusText != null) statusText.text = "";
 
-        // allumer 1 automatiquement (pour respecter "la première est forcément le 1")
         if (numToPos.TryGetValue(1, out var pos1))
-        {
             Light(pos1);
-        }
+
         hasWon = false;
+        CancelInvoke(nameof(ReturnToMainScene));
     }
 
     private bool IsNeighbor4(Vector2Int a, Vector2Int b)
@@ -198,11 +186,20 @@ public class ZipBoard : MonoBehaviour
         int dy = Mathf.Abs(a.y - b.y);
         return (dx + dy) == 1;
     }
+
     private void Win()
     {
         hasWon = true;
+
         if (statusText != null)
-            statusText.text = "Bien joué !\n" + winHint;
+            statusText.text = "Bien joué ! Passe à la prochaine énigme !\n" + winHint;
+
+        Invoke(nameof(ReturnToMainScene), returnDelaySeconds);
+    }
+
+    private void ReturnToMainScene()
+    {
+        SceneManager.LoadScene(mainSceneName);
     }
 
     private bool IsLastMoveMaxNumber()
@@ -211,6 +208,4 @@ public class ZipBoard : MonoBehaviour
         Vector2Int last = path[path.Count - 1];
         return numbers[last.x, last.y] == maxNumber;
     }
-
-
 }
