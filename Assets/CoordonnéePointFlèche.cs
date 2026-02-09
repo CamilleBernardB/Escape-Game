@@ -4,10 +4,10 @@ using UnityEngine;
 public class ShowPointCoords : MonoBehaviour
 {
     [Header("What to read")]
-    [SerializeField] Transform point;   // ton personnage / point déplacé
+    [SerializeField] Transform point;   // personnage / point déplacé
 
     [Header("Where to display")]
-    [SerializeField] TMP_Text label;    // ton Text (TMP) UI
+    [SerializeField] TMP_Text label;    // Text (TMP) UI
 
     [Header("Formatting")]
     [SerializeField] int decimals = 3;
